@@ -24,6 +24,10 @@
     @keyframes dpulse   {0%,100%{opacity:1}50%{opacity:.45}}
     @keyframes fadeIn   {from{opacity:0}to{opacity:1}}
     @keyframes barGrow  {from{width:0}}
+    @keyframes healGlow {0%,100%{box-shadow:0 0 20px rgba(52,211,153,.3)}50%{box-shadow:0 0 50px rgba(52,211,153,.7)}}
+    @keyframes sparkle  {0%{transform:scale(0) rotate(0deg);opacity:0}50%{transform:scale(1.2) rotate(180deg);opacity:1}100%{transform:scale(1) rotate(360deg);opacity:.8}}
+    @keyframes healPulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+    @keyframes rainbowBorder{0%{border-color:#22c55e}25%{border-color:#38bdf8}50%{border-color:#a78bfa}75%{border-color:#fbbf24}100%{border-color:#22c55e}}
 
     .float-anim {animation:floatY 4s ease-in-out infinite}
     .glow-anim  {animation:glow 3s ease-in-out infinite}
@@ -41,6 +45,10 @@
     .card-btn:hover{transform:translateY(-5px) scale(1.015)}
     .sp-btn    {transition:all .15s ease}
     .sp-btn:hover:not(:disabled){transform:scale(1.07)}
+    .heal-glow {animation:healGlow 2s ease-in-out infinite}
+    .sparkle   {animation:sparkle .6s ease-out forwards}
+    .heal-pulse{animation:healPulse 1.5s ease-in-out infinite}
+    .rainbow-border{animation:rainbowBorder 3s linear infinite}
     ::-webkit-scrollbar{width:4px}
     ::-webkit-scrollbar-track{background:rgba(255,255,255,.04)}
     ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
@@ -78,15 +86,10 @@ const STAT_META={
 const SPHERES   = Object.keys(STAT_META);
 const INIT      = {atmosphere:60,hydrosphere:60,geosphere:60,biosphere:60,exosphere:60};
 const MAX_TURNS = 7;
+const HEAL_AMOUNT = 20;
 
-/* ═══════════════ CARD DATA (14장) ═══════════════
-   각 카드:
-   · primary    : 카드 선택 즉시 자동 적용
-   · consequences 5개 중 correct:true 가 정답 (항상 3개)
-   · 학생은 정답 3개를 모두 체크해야 '확인' 가능
-═══════════════════════════════════════════════*/
+/* ═══════════════ CARD DATA (14장) ═══════════════ */
 const CARDS=[
-  /* 1. 대규모 화산 폭발 */
   {id:'volcano',name:'대규모 화산 폭발',emoji:'🌋',
    desc:'지하 마그마가 지표면을 뚫고 대량 분출합니다.',
    primary:{key:'geosphere',delta:-18,text:'지각이 크게 흔들리고 지형이 변형된다'},
@@ -109,7 +112,6 @@ const CARDS=[
    ],
    basis:'[지권→기권→생물권→수권] 화산재(기권 오염)→광합성 감소(생물권)→산성비(수권) 순으로 연쇄 영향을 줍니다.'},
 
-  /* 2. 태양 흑점 폭발 */
   {id:'solar',name:'태양 흑점 폭발',emoji:'☀️',
    desc:'강력한 태양풍과 방사선이 지구를 강타합니다.',
    primary:{key:'exosphere',delta:+20,text:'외권이 강한 태양에너지로 교란된다'},
@@ -132,7 +134,6 @@ const CARDS=[
    ],
    basis:'[외권→기권→생물권·수권] 태양풍이 오존층(기권)을 파괴→자외선 증가→생물 피해(생물권)·수온 상승(수권).'},
 
-  /* 3. 집중 호우 */
   {id:'rain',name:'집중 호우',emoji:'🌧️',
    desc:'수일간 기록적인 폭우가 광범위하게 쏟아집니다.',
    primary:{key:'hydrosphere',delta:+18,text:'강·호수·지하수의 수위가 급격히 높아진다'},
@@ -155,7 +156,6 @@ const CARDS=[
    ],
    basis:'[기권→수권→지권→생물권] 대기 수증기(기권)가 폭우(수권)로 내려 토양 침식(지권)과 생태계 파괴(생물권)를 일으킵니다.'},
 
-  /* 4. 생명체의 대번성 */
   {id:'bloom',name:'생명체의 대번성',emoji:'🌱',
    desc:'지구 전역에서 식물과 생물이 폭발적으로 증가합니다.',
    primary:{key:'biosphere',delta:+20,text:'동식물 개체수가 급증하고 생태계가 풍부해진다'},
@@ -178,7 +178,6 @@ const CARDS=[
    ],
    basis:'[생물권→기권→지권→수권] 생물 번성이 대기질(기권), 토양(지권), 수분 순환(수권)을 연쇄적으로 개선합니다.'},
 
-  /* 5. 거대 운석 충돌 */
   {id:'meteor',name:'거대 운석 충돌',emoji:'☄️',
    desc:'직경 수 km의 운석이 대양에 충돌합니다.',
    primary:{key:'hydrosphere',delta:-20,text:'충돌 지점에 초거대 쓰나미가 발생한다'},
@@ -201,7 +200,6 @@ const CARDS=[
    ],
    basis:'[외권→수권→기권→생물권→지권] 운석이 모든 권역을 차례로 파괴하는 최악의 재앙입니다.'},
 
-  /* 6. 초강력 태풍 */
   {id:'typhoon',name:'초강력 태풍',emoji:'🌀',
    desc:'역대급 열대성 저기압이 육지에 상륙합니다.',
    primary:{key:'atmosphere',delta:-12,text:'강풍과 저기압으로 대기 시스템이 교란된다'},
@@ -224,7 +222,6 @@ const CARDS=[
    ],
    basis:'[기권→수권→지권→생물권] 대기 교란(기권)이 해수면 상승(수권), 지형 침식(지권), 생태계 파괴(생물권)로 이어집니다.'},
 
-  /* 7. 대규모 산불 */
   {id:'fire',name:'대규모 산불',emoji:'🔥',
    desc:'가뭄과 고온으로 광대한 숲이 타오릅니다.',
    primary:{key:'biosphere',delta:-20,text:'숲과 생태계가 광범위하게 소실된다'},
@@ -247,7 +244,6 @@ const CARDS=[
    ],
    basis:'[생물권→기권→지권→수권] 생태계 파괴(생물권)가 대기오염(기권), 토양 침식(지권), 수질오염(수권)을 연쇄 유발합니다.'},
 
-  /* 8. 빙하 대량 해빙 */
   {id:'glacier',name:'빙하 대량 해빙',emoji:'🧊',
    desc:'극지방의 거대한 빙하가 빠르게 녹아내립니다.',
    primary:{key:'hydrosphere',delta:-15,text:'해수면이 상승하고 바닷물의 염분 농도가 낮아진다'},
@@ -270,7 +266,6 @@ const CARDS=[
    ],
    basis:'[수권→기권→생물권→지권] 빙하 소실(수권)이 온난화 가속(기권), 서식지 붕괴(생물권), 해안 침수(지권)를 연쇄 일으킵니다.'},
 
-  /* 9. 해저 지진 */
   {id:'earthquake',name:'해저 지진·쓰나미',emoji:'🌊',
    desc:'바다 밑 지각이 크게 어긋나며 거대한 파도가 발생합니다.',
    primary:{key:'geosphere',delta:-16,text:'해저 지각이 파열되고 지형이 급변한다'},
@@ -293,7 +288,6 @@ const CARDS=[
    ],
    basis:'[지권→수권→생물권→기권] 지각 변동(지권)이 쓰나미(수권)→생태계 파괴(생물권)→가스 방출(기권) 순으로 연쇄됩니다.'},
 
-  /* 10. 사막화 */
   {id:'desert',name:'대규모 사막화',emoji:'🏜️',
    desc:'과도한 개발과 가뭄으로 넓은 땅이 사막으로 변합니다.',
    primary:{key:'geosphere',delta:-14,text:'토양 수분이 사라지고 땅이 메마르게 굳는다'},
@@ -316,7 +310,6 @@ const CARDS=[
    ],
    basis:'[지권→생물권→기권→수권] 토양 황폐화(지권)가 생태계 붕괴(생물권)→대기 오염(기권)→수자원 감소(수권)로 이어집니다.'},
 
-  /* 11. 오로라·자기폭풍 */
   {id:'geomag',name:'강력한 지자기 폭풍',emoji:'🧲',
    desc:'태양에서 날아온 입자가 지구 자기장을 강하게 흔듭니다.',
    primary:{key:'exosphere',delta:-18,text:'외권(지구 자기장)이 심하게 교란된다'},
@@ -339,7 +332,6 @@ const CARDS=[
    ],
    basis:'[외권→기권→생물권] 자기장 교란(외권)이 방사선 노출(기권)→생물 피해(생물권)로 이어집니다.'},
 
-  /* 12. 적조·녹조 */
   {id:'algae',name:'적조·녹조 대발생',emoji:'🦠',
    desc:'수중 미세조류가 폭발적으로 번식해 강과 바다를 뒤덮습니다.',
    primary:{key:'biosphere',delta:-12,text:'물속 생물 다양성이 급격히 줄어든다'},
@@ -362,7 +354,6 @@ const CARDS=[
    ],
    basis:'[생물권→수권→기권] 조류 대발생(생물권)이 수질 오염(수권)→대기 오염(기권)으로 연쇄됩니다.'},
 
-  /* 13. 대기 대오염 */
   {id:'pollution',name:'심각한 대기 오염',emoji:'🏭',
    desc:'산업 시설과 자동차에서 나오는 오염 물질이 대기를 가득 채웁니다.',
    primary:{key:'atmosphere',delta:-16,text:'대기 중 오염 물질 농도가 위험 수준까지 올라간다'},
@@ -385,7 +376,6 @@ const CARDS=[
    ],
    basis:'[기권→생물권→수권→지권] 대기 오염(기권)이 생물 피해(생물권)→산성비(수권)→토양 부식(지권)으로 연쇄됩니다.'},
 
-  /* 14. 해양 온난화 */
   {id:'oceanwarm',name:'해양 온난화',emoji:'🐠',
    desc:'지구 온난화로 바닷물의 온도가 지속적으로 상승합니다.',
    primary:{key:'hydrosphere',delta:-14,text:'바닷물의 온도가 오르고 산소 농도가 낮아진다'},
@@ -412,11 +402,10 @@ const CARDS=[
 /* ═══════════════ HELPERS ═══════════════ */
 const clamp    = v=>Math.max(0,Math.min(100,v));
 const drawHand = (n=3)=>[...CARDS].sort(()=>Math.random()-.5).slice(0,n);
-const correctCount = card => card.consequences.filter(c=>c.correct).length; // always 3
+const correctCount = card => card.consequences.filter(c=>c.correct).length;
 
 /* ═══════════════ COMPONENTS ═══════════════ */
 
-/* ── Fixed Footer ── */
 function Footer(){
   return(
     <div style={{borderTop:'1px solid rgba(255,255,255,.07)',padding:'10px 0',textAlign:'center',background:'#060b14'}}>
@@ -429,7 +418,6 @@ function Footer(){
   );
 }
 
-/* ── Info Modal ── */
 function InfoModal({onClose}){
   return(
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
@@ -465,6 +453,9 @@ function InfoModal({onClose}){
               <li>오답 체크: -2점</li>
             </ul>
           </div>
+          <div className="rounded-xl p-3" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)'}}>
+            <p style={{color:'#6ee7b7',fontSize:13}}>💚 <b>회복 카드</b>: 결과 3개 + 권역 3개를 모두 맞히면 회복 카드가 등장! 원하는 권역을 <b>+{HEAL_AMOUNT}%</b> 회복할 수 있습니다.</p>
+          </div>
           <div className="rounded-xl p-3" style={{background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.3)'}}>
             <p style={{color:'#fca5a5',fontSize:13}}>⚠️ 단 하나의 권역이라도 <b>0%</b>가 되면 게임 오버! <b>{MAX_TURNS}턴</b> 동안 지구를 지켜내세요.</p>
           </div>
@@ -481,15 +472,14 @@ function InfoModal({onClose}){
   );
 }
 
-/* ── StatBar ── */
-function StatBar({statKey,value,prevValue,highlight}){
+function StatBar({statKey,value,prevValue,highlight,healHighlight}){
   const m=STAT_META[statKey];
   const danger=value<=20; const warning=value>20&&value<=35;
   const delta=prevValue!==undefined?value-prevValue:0;
   const barClr=danger?'#ef4444':warning?'#f97316':m.color;
-  const hlClr=highlight==='good'?'#22c55e':highlight==='bad'?'#ef4444':null;
+  const hlClr=highlight==='good'?'#22c55e':highlight==='bad'?'#ef4444':healHighlight?'#34d399':null;
   return(
-    <div className={`rounded-xl p-3 border-2 transition-all duration-500 ${danger?'border-red-500/70 bg-red-950/30':warning?'border-orange-500/50 bg-orange-950/20':'border-white/10 bg-white/5'}`}
+    <div className={`rounded-xl p-3 border-2 transition-all duration-500 ${danger?'border-red-500/70 bg-red-950/30':warning?'border-orange-500/50 bg-orange-950/20':'border-white/10 bg-white/5'} ${healHighlight?'heal-pulse':''}`}
       style={hlClr?{outline:`3px solid ${hlClr}`,outlineOffset:2}:{}}>
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2">
@@ -511,7 +501,6 @@ function StatBar({statKey,value,prevValue,highlight}){
   );
 }
 
-/* ── Globe ── */
 function Globe({stats}){
   const avg=Object.values(stats).reduce((a,b)=>a+b,0)/5;
   const crisis=Object.values(stats).some(v=>v<=20);
@@ -532,7 +521,6 @@ function Globe({stats}){
   );
 }
 
-/* ── ConseqRow ── */
 function ConseqRow({item,checked,pickedSphere,revealed,onToggle,onPickSphere}){
   let rowStyle='border-white/12 bg-white/5 text-white/85';
   if(!revealed){if(checked)rowStyle='border-sky-400/70 bg-sky-950/30 text-white';}
@@ -561,7 +549,7 @@ function ConseqRow({item,checked,pickedSphere,revealed,onToggle,onPickSphere}){
                 {STAT_META[item.key].icon} {STAT_META[item.key].label}
               </span>
               {pickedSphere&&<span className={`ft text-sm ${pickedSphere===item.key?'text-green-400':'text-red-400'}`}>
-                {pickedSphere===item.key?'✅ 정답!`':''}
+                {pickedSphere===item.key?'✅ 정답!':''}
                 {pickedSphere!==item.key?`❌ (내 답: ${STAT_META[pickedSphere].icon}${STAT_META[pickedSphere].label})`:''}
               </span>}
             </div>
@@ -589,7 +577,112 @@ function ConseqRow({item,checked,pickedSphere,revealed,onToggle,onPickSphere}){
   );
 }
 
-/* ── Report Modal ── */
+/* ── Heal Card UI ── */
+function HealCardPanel({stats,onHeal,onSkip,onDone}){
+  const [selected,setSelected]=useState(null);
+  const [healed,setHealed]=useState(false);
+
+  const doHeal=()=>{
+    if(!selected)return;
+    onHeal(selected);
+    setHealed(true);
+  };
+
+  const sorted=[...SPHERES].sort((a,b)=>stats[a]-stats[b]);
+
+  return(
+    <div className="slide-up">
+      <div className="rounded-2xl p-5 rainbow-border border-2 relative overflow-hidden"
+        style={{background:'linear-gradient(135deg,rgba(6,95,70,.25),rgba(8,47,73,.25),rgba(88,28,135,.15))'}}>
+        <div className="absolute top-3 right-4 text-2xl sparkle" style={{animationDelay:'0s'}}>✨</div>
+        <div className="absolute top-8 right-14 text-lg sparkle" style={{animationDelay:'.2s'}}>⭐</div>
+        <div className="absolute bottom-4 left-5 text-xl sparkle" style={{animationDelay:'.4s'}}>💫</div>
+
+        <div className="flex items-center gap-3 mb-4">
+          <div className="text-4xl heal-pulse">💚</div>
+          <div>
+            <h3 className="ft text-xl" style={{color:'#34d399'}}>회복 카드 획득!</h3>
+            <p className="text-sm" style={{color:'rgba(255,255,255,.6)'}}>
+              퍼펙트! 모든 문제를 맞혀서 회복 카드를 얻었습니다
+            </p>
+          </div>
+        </div>
+
+        {!healed?(
+          <>
+            <div className="rounded-xl p-3 mb-4" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.25)'}}>
+              <p className="text-base" style={{color:'rgba(255,255,255,.8)'}}>
+                원하는 권역 하나를 선택해 <span className="ft" style={{color:'#34d399'}}>+{HEAL_AMOUNT}%</span> 회복하세요!
+              </p>
+            </div>
+            <div className="grid gap-2 mb-4">
+              {sorted.map(sk=>{
+                const m=STAT_META[sk];
+                const v=stats[sk];
+                const sel=selected===sk;
+                const maxed=v>=100;
+                const danger=v<=20;
+                const warning=v>20&&v<=35;
+                return(
+                  <button key={sk} onClick={()=>!maxed&&setSelected(sk)} disabled={maxed}
+                    className={`sp-btn rounded-xl p-3 border-2 flex items-center gap-3 text-left transition-all ${maxed?'opacity-40 cursor-not-allowed':''}`}
+                    style={{
+                      borderColor:sel?'#34d399':danger?'rgba(239,68,68,.4)':warning?'rgba(249,115,22,.3)':'rgba(255,255,255,.12)',
+                      background:sel?'rgba(52,211,153,.15)':danger?'rgba(127,29,29,.15)':'rgba(255,255,255,.04)',
+                      outline:sel?'3px solid rgba(52,211,153,.5)':'none',
+                      outlineOffset:2
+                    }}>
+                    <span className="text-2xl">{m.icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="ft text-base text-white">{m.label}</span>
+                        {danger&&<span className="ft text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400 dpulse">위험!</span>}
+                        {warning&&<span className="ft text-xs px-1.5 py-0.5 rounded bg-orange-900/50 text-orange-400">주의</span>}
+                        {maxed&&<span className="ft text-xs px-1.5 py-0.5 rounded bg-white/10 text-white/40">MAX</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,.1)'}}>
+                          <div className="h-full rounded-full" style={{width:`${v}%`,background:danger?'#ef4444':warning?'#f97316':m.color}}/>
+                        </div>
+                        <span className="ft text-sm w-10 text-right" style={{color:danger?'#f87171':'rgba(255,255,255,.6)'}}>{v}%</span>
+                        {!maxed&&<span className="ft text-sm text-green-400">→{Math.min(100,v+HEAL_AMOUNT)}%</span>}
+                      </div>
+                    </div>
+                    {sel&&<span className="text-xl">✅</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={onSkip}
+                className="flex-1 py-3 ft text-base rounded-xl transition-all"
+                style={{border:'1px solid rgba(255,255,255,.15)',color:'rgba(255,255,255,.4)'}}>
+                건너뛰기
+              </button>
+              <button onClick={doHeal} disabled={!selected}
+                className={`flex-1 py-3 ft text-base rounded-xl text-white transition-all ${selected?'cursor-pointer':'cursor-not-allowed opacity-50'}`}
+                style={selected?{background:'linear-gradient(135deg,#059669,#0d9488)',boxShadow:'0 0 25px rgba(52,211,153,.3)'}:{background:'#1e293b'}}>
+                {selected?`${STAT_META[selected].icon} ${STAT_META[selected].label} +${HEAL_AMOUNT}% 회복!`:'권역을 선택하세요'}
+              </button>
+            </div>
+          </>
+        ):(
+          <div className="text-center py-4 fade-in">
+            <div className="text-5xl mb-3 pop-in">🌟</div>
+            <p className="ft text-lg mb-4" style={{color:'#34d399'}}>
+              {STAT_META[selected].icon} {STAT_META[selected].label} +{HEAL_AMOUNT}% 회복 완료!
+            </p>
+            <button onClick={onDone} className="w-full py-3 ft text-base rounded-xl text-white"
+              style={{background:'linear-gradient(135deg,#059669,#0d9488)',boxShadow:'0 0 25px rgba(52,211,153,.3)'}}>
+              다음으로 →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ReportModal({stats,logs,score,turn,onClose}){
   const avg=Math.round(Object.values(stats).reduce((a,b)=>a+b,0)/5);
   const grade=avg>=70?'A':avg>=55?'B':avg>=40?'C':'D';
@@ -646,13 +739,17 @@ function App(){
   const [showReport, setShowReport] = useState(false);
   const [showInfo,   setShowInfo]   = useState(false);
 
-  // Consequence phase
   const [activeCard,  setActiveCard]  = useState(null);
   const [postPrimary, setPostPrimary] = useState(null);
   const [checkedIds,  setCheckedIds]  = useState(new Set());
   const [spherePicks, setSpherePicks] = useState({});
   const [revealed,    setRevealed]    = useState(false);
   const [highlights,  setHighlights]  = useState({});
+
+  // ★ 회복 카드 관련 state
+  const [isPerfect,     setIsPerfect]     = useState(false);
+  const [healPhase,     setHealPhase]     = useState(false);
+  const [healedSphere,  setHealedSphere]  = useState(null);
 
   const logsRef=useRef(null);
   useEffect(()=>{logsRef.current?.scrollTo(0,logsRef.current.scrollHeight);},[logs]);
@@ -664,6 +761,7 @@ function App(){
     setHand(drawHand(3));setLogs([]);setResult(null);setScore(0);
     setActiveCard(null);setPostPrimary(null);
     setCheckedIds(new Set());setSpherePicks({});setRevealed(false);setHighlights({});
+    setIsPerfect(false);setHealPhase(false);setHealedSphere(null);
     setScreen('select');
   }
 
@@ -672,6 +770,7 @@ function App(){
     after[card.primary.key]=clamp(after[card.primary.key]+card.primary.delta);
     setPrevStats(stats);setPostPrimary(after);setActiveCard(card);
     setCheckedIds(new Set());setSpherePicks({});setRevealed(false);setHighlights({});
+    setIsPerfect(false);setHealPhase(false);setHealedSphere(null);
     addLog(`선택: "${card.name}"`,turn);
     setScreen('consequences');
   }
@@ -687,7 +786,6 @@ function App(){
 
   function pickSphere(cid,sk){setSpherePicks(p=>({...p,[cid]:sk}));}
 
-  // ★ 핵심 수정: 정답 3개를 모두 체크 + 권역 모두 선택해야 확인 가능
   const totalCorrect = activeCard ? correctCount(activeCard) : 0;
   const checkedCorrect = activeCard ? activeCard.consequences.filter(c=>c.correct&&checkedIds.has(c.id)).length : 0;
   const checkedWrong   = activeCard ? activeCard.consequences.filter(c=>!c.correct&&checkedIds.has(c.id)).length : 0;
@@ -700,30 +798,68 @@ function App(){
     setRevealed(true);
     let ns={...postPrimary};const hl={};
     let pts=2;
+    let sphereCorrectCount=0;
     activeCard.consequences.forEach(c=>{
       const yes=checkedIds.has(c.id);const sp=spherePicks[c.id]||null;
-      if(yes&&c.correct){pts+=3;if(c.delta!==0){ns[c.key]=clamp(ns[c.key]+c.delta);hl[c.key]=c.delta>0?'good':'bad';}if(sp===c.key)pts+=3;}
+      if(yes&&c.correct){pts+=3;if(c.delta!==0){ns[c.key]=clamp(ns[c.key]+c.delta);hl[c.key]=c.delta>0?'good':'bad';}if(sp===c.key){pts+=3;sphereCorrectCount++;}}
       else if(yes&&!c.correct)pts-=2;
     });
     pts=Math.max(0,pts);
+
+    const perfect = checkedCorrect===totalCorrect && checkedWrong===0 && sphereCorrectCount===totalCorrect;
+    setIsPerfect(perfect);
+
     setScore(s=>s+pts);setStats(ns);setHighlights(hl);
-    const sh=activeCard.consequences.filter(c=>c.correct&&checkedIds.has(c.id)&&spherePicks[c.id]===c.key).length;
-    addLog(`결과 ${checkedCorrect}개 정답·권역 ${sh}개 정답·오답 ${checkedWrong}개 → +${pts}점`,turn);
+    addLog(`결과 ${checkedCorrect}개 정답·권역 ${sphereCorrectCount}개 정답·오답 ${checkedWrong}개 → +${pts}점`,turn);
+    if(perfect) addLog(`💚 퍼펙트! 회복 카드 획득!`,turn);
+
     const dead=Object.entries(ns).find(([,v])=>v===0);
     if(dead){setResult('lost');setTimeout(()=>setScreen('ended'),2200);return;}
-    if(turn>=MAX_TURNS){setResult('won');setTimeout(()=>setScreen('ended'),2200);return;}
+    if(turn>=MAX_TURNS && !perfect){
+      setResult('won');setTimeout(()=>setScreen('ended'),2200);return;
+    }
   }
 
-  function nextTurn(){
+  function handleHeal(sphereKey){
+    const ns={...stats};
+    const oldVal=ns[sphereKey];
+    ns[sphereKey]=clamp(ns[sphereKey]+HEAL_AMOUNT);
+    setStats(ns);setHealedSphere(sphereKey);
+    addLog(`💚 회복 카드 사용: ${STAT_META[sphereKey].icon}${STAT_META[sphereKey].label} +${HEAL_AMOUNT}% (${oldVal}%→${ns[sphereKey]}%)`,turn);
+    setScore(s=>s+5);
+  }
+
+  function handleHealSkip(){
+    addLog(`회복 카드 건너뜀`,turn);
+    goNextTurn();
+  }
+
+  function handleHealDone(){
+    goNextTurn();
+  }
+
+  function goNextTurn(){
+    if(turn>=MAX_TURNS){
+      setResult('won');setTimeout(()=>setScreen('ended'),1200);
+      return;
+    }
     setTurn(t=>t+1);setHand(drawHand(3));
     setActiveCard(null);setPostPrimary(null);
     setCheckedIds(new Set());setSpherePicks({});setRevealed(false);setHighlights({});
+    setIsPerfect(false);setHealPhase(false);setHealedSphere(null);
     setScreen('select');
+  }
+
+  function nextTurn(){
+    if(isPerfect&&!healPhase){
+      setHealPhase(true);
+      return;
+    }
+    goNextTurn();
   }
 
   const displayStats=screen==='consequences'?(postPrimary||stats):stats;
 
-  // confirm button label
   const getConfirmLabel=()=>{
     if(checkedIds.size===0) return `정답 ${totalCorrect}개를 찾아서 체크하세요`;
     if(!allCorrectChecked){
@@ -734,7 +870,6 @@ function App(){
     return `✅ 선택 완료 → 결과 확인하기`;
   };
 
-  /* ── TOP NAV (공통) ── */
   const TopNav=({showScore=false})=>(
     <header style={{borderBottom:'1px solid rgba(255,255,255,.07)',padding:'10px 20px',background:'rgba(6,11,20,.95)',position:'sticky',top:0,zIndex:10}}>
       <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -817,6 +952,13 @@ function App(){
                 </div>
               ))}
             </div>
+            <div className="rounded-xl px-4 py-2.5 flex items-center gap-3"
+              style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.25)'}}>
+              <span className="text-xl">💚</span>
+              <span className="text-base" style={{color:'rgba(255,255,255,.8)'}}>
+                모두 맞히면 <span className="ft" style={{color:'#34d399'}}>회복 카드</span>로 권역을 +{HEAL_AMOUNT}% 회복!
+              </span>
+            </div>
             <p className="text-sm" style={{color:'rgba(255,255,255,.4)'}}>
               단 하나의 권역이라도 <span className="ft" style={{color:'#f87171'}}>0%</span>가 되면 게임 오버.&nbsp;
               <span className="ft" style={{color:'#4ade80'}}>{MAX_TURNS}턴</span> 동안 살아남으세요!
@@ -888,14 +1030,16 @@ function App(){
           <div className="flex justify-center py-1"><Globe stats={displayStats}/></div>
           <div className="ft text-xs text-center" style={{color:'rgba(255,255,255,.3)',letterSpacing:'0.1em'}}>지구 권역 상태</div>
           {SPHERES.map(k=>(
-            <StatBar key={k} statKey={k} value={displayStats[k]} prevValue={prevStats[k]} highlight={revealed?highlights[k]:null}/>
+            <StatBar key={k} statKey={k} value={displayStats[k]} prevValue={prevStats[k]}
+              highlight={revealed?highlights[k]:null}
+              healHighlight={healedSphere===k}/>
           ))}
           <div ref={logsRef} className="rounded-xl p-3 overflow-y-auto mt-1"
             style={{border:'1px solid rgba(255,255,255,.07)',background:'rgba(0,0,0,.3)',height:88}}>
             {logs.length===0&&<p className="text-sm text-center" style={{color:'rgba(255,255,255,.2)',marginTop:8}}>이벤트 기록</p>}
             {logs.map((l,i)=>(
               <div key={i} className="text-sm mb-1 leading-snug"
-                style={{color:l.includes('선택:')?'#fcd34d':l.includes('정답')?'#7dd3fc':'rgba(255,255,255,.3)'}}>
+                style={{color:l.includes('선택:')?'#fcd34d':l.includes('퍼펙트')||l.includes('회복')?'#34d399':l.includes('정답')?'#7dd3fc':'rgba(255,255,255,.3)'}}>
                 {l}
               </div>
             ))}
@@ -905,7 +1049,7 @@ function App(){
         {/* RIGHT */}
         <div className="flex-1 flex flex-col gap-4 min-w-0">
 
-          {/* PHASE 1 */}
+          {/* PHASE 1: SELECT */}
           {screen==='select'&&(
             <>
               <div>
@@ -941,10 +1085,9 @@ function App(){
             </>
           )}
 
-          {/* PHASE 2 */}
+          {/* PHASE 2: CONSEQUENCES */}
           {screen==='consequences'&&activeCard&&(
             <div className="flex flex-col gap-4 flex-1 slide-up">
-              {/* Card header */}
               <div className="rounded-2xl p-4 flex-shrink-0"
                 style={{border:'2px solid rgba(245,158,11,.4)',background:'rgba(120,53,15,.2)'}}>
                 <div className="flex items-center gap-3 mb-3">
@@ -964,7 +1107,6 @@ function App(){
                 </div>
               </div>
 
-              {/* Step guide */}
               {!revealed?(
                 <div className="flex gap-3 flex-shrink-0">
                   <div className="flex-1 rounded-xl px-3 py-2 flex items-center gap-2"
@@ -984,10 +1126,15 @@ function App(){
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <IcoInfo s={18} c="text-green-400 flex-shrink-0"/>
                   <p className="ft text-lg text-green-300">결과 확인 — 과학적 원리를 읽어보세요!</p>
+                  {isPerfect&&!healPhase&&(
+                    <span className="ft text-sm px-2 py-1 rounded-lg ml-2 sparkle"
+                      style={{background:'rgba(52,211,153,.2)',border:'1px solid rgba(52,211,153,.4)',color:'#34d399'}}>
+                      💚 퍼펙트! 회복 카드 획득!
+                    </span>
+                  )}
                 </div>
               )}
 
-              {/* Progress indicator */}
               {!revealed&&checkedIds.size>0&&(
                 <div className="flex-shrink-0 flex items-center gap-3"
                   style={{background:'rgba(255,255,255,.04)',borderRadius:12,padding:'8px 14px',border:'1px solid rgba(255,255,255,.08)'}}>
@@ -1006,14 +1153,21 @@ function App(){
                 </div>
               )}
 
-              {/* Rows */}
-              <div className="flex flex-col gap-2.5 overflow-y-auto pr-1" style={{flex:1,maxHeight:'calc(100vh - 420px)'}}>
-                {activeCard.consequences.map(c=>(
-                  <ConseqRow key={c.id} item={c}
-                    checked={checkedIds.has(c.id)} pickedSphere={spherePicks[c.id]||null}
-                    revealed={revealed} onToggle={toggleCheck} onPickSphere={pickSphere}/>
-                ))}
-              </div>
+              {/* ★ 회복 카드 UI */}
+              {healPhase&&(
+                <HealCardPanel stats={stats} onHeal={handleHeal} onSkip={handleHealSkip} onDone={handleHealDone}/>
+              )}
+
+              {/* Consequence rows — hide when in heal phase */}
+              {!healPhase&&(
+                <div className="flex flex-col gap-2.5 overflow-y-auto pr-1" style={{flex:1,maxHeight:'calc(100vh - 420px)'}}>
+                  {activeCard.consequences.map(c=>(
+                    <ConseqRow key={c.id} item={c}
+                      checked={checkedIds.has(c.id)} pickedSphere={spherePicks[c.id]||null}
+                      revealed={revealed} onToggle={toggleCheck} onPickSphere={pickSphere}/>
+                  ))}
+                </div>
+              )}
 
               {/* CTA */}
               <div className="flex-shrink-0">
@@ -1023,10 +1177,17 @@ function App(){
                     style={canConfirm?{background:'linear-gradient(135deg,#0ea5e9,#10b981)',boxShadow:'0 0 25px rgba(14,165,233,.3)'}:{background:'#1e293b'}}>
                     {getConfirmLabel()}
                   </button>
+                ):healPhase?(
+                  null
                 ):(
                   <button onClick={nextTurn} className="w-full py-4 ft text-lg rounded-2xl text-white"
-                    style={{background:'linear-gradient(135deg,#7c3aed,#0ea5e9)',boxShadow:'0 0 25px rgba(124,58,237,.3)'}}>
-                    다음 턴으로 → ({Math.min(turn+1,MAX_TURNS)}/{MAX_TURNS}턴)
+                    style={{background:isPerfect
+                      ?'linear-gradient(135deg,#059669,#0d9488,#0ea5e9)'
+                      :'linear-gradient(135deg,#7c3aed,#0ea5e9)',
+                      boxShadow:isPerfect?'0 0 25px rgba(52,211,153,.4)':'0 0 25px rgba(124,58,237,.3)'}}>
+                    {isPerfect
+                      ?'💚 회복 카드 사용하기 →'
+                      :`다음 턴으로 → (${Math.min(turn+1,MAX_TURNS)}/${MAX_TURNS}턴)`}
                   </button>
                 )}
               </div>
